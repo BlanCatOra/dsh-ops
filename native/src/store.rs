@@ -145,8 +145,20 @@ impl Store {
         self.dir
             .rename(&temporary, &self.dir, format!("{id}.{generation:06}.json"))?;
         // Persist directory entries where the platform supports directory fsync.
+        //
+        // `try_clone` hands back a duplicate of the capability's own descriptor, and
+        // cap-std opens directories `O_PATH` on Linux (`cap-primitives-3.4.6`
+        // `rustix/fs/dir_utils.rs:124`). `fsync` on an `O_PATH` descriptor is
+        // `EBADF` by kernel contract, so re-open the same directory through the
+        // capability asking for `read` — that yields an `O_RDONLY` descriptor,
+        // which fsyncs — instead of reporting a failure or silently skipping the
+        // barrier. `follow(No)` keeps the no-follow guarantee of the capability.
         #[cfg(unix)]
-        self.dir.try_clone()?.into_std_file().sync_all()?;
+        {
+            let mut options = OpenOptions::new();
+            options.read(true).follow(FollowSymlinks::No);
+            self.dir.open_with(".", &options)?.into_std().sync_all()?;
+        }
         Ok(())
     }
     pub fn release(&self, id: &str) -> Result<()> {

@@ -310,7 +310,14 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
         let _ = parent.remove_file(&temporary);
         return Err(Failure::new("ACCESS_DENIED", format!("Atomic replacement publish: {error}")));
     }
+    // See `store::save`: cap-std directories are `O_PATH` on Linux and an `O_PATH`
+    // descriptor cannot be fsynced. Re-open readably so the directory entry really
+    // is persisted, rather than swallowing `EBADF` and losing the barrier.
     #[cfg(unix)]
-    parent.try_clone()?.into_std_file().sync_all()?;
+    {
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.read(true).follow(FollowSymlinks::No);
+        parent.open_with(".", &options)?.into_std().sync_all()?;
+    }
     Ok(())
 }

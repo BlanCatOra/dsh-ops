@@ -322,7 +322,10 @@ await test('a bundled package without its executable is reported, then searched 
 await test('the managed copy and the vendored build still outrank both packages', async () => {
   await withTempDir('own-package-order', async (dir) => {
     const env = { DSH_HOME: path.join(dir, 'home') }
-    const managed = seed(managedBinaryFile({ env }))
+    // The fixture tree is forged for `FORGED`, so the managed copy must be seeded
+    // for that same target; deriving it from the host would name `fastctx` on a
+    // Linux host while the resolver looks for the forged `fastctx.exe`.
+    const managed = seed(managedBinaryFile({ env, platform: FORGED.platform }))
     const built = seed(path.join(dir, 'vendor', 'fastctx', 'target', 'release', FORGED.executable))
     const ours = stageOwnPackage(dir)
     const upstream = stageUpstreamPackage(dir)
